@@ -1,65 +1,78 @@
-"""Terminal color highlighting for matched log lines and timestamps."""
+"""ANSI color helpers for log-level tokens and timestamps."""
+
+from __future__ import annotations
 
 import re
-from typing import Optional
+import sys
+from typing import IO
 
-ANSI_RESET = "\033[0m"
-ANSI_BOLD = "\033[1m"
-ANSI_RED = "\033[31m"
-ANSI_GREEN = "\033[32m"
-ANSI_YELLOW = "\033[33m"
-ANSI_CYAN = "\033[36m"
-ANSI_MAGENTA = "\033[35m"
+# ---------------------------------------------------------------------------
+# ANSI codes
+# ---------------------------------------------------------------------------
+_RESET = "\033[0m"
+_RED = "\033[31m"
+_GREEN = "\033[32m"
+_YELLOW = "\033[33m"
+_CYAN = "\033[36m"
+_BOLD = "\033[1m"
 
-LEVEL_COLORS = {
-    "ERROR": ANSI_RED,
-    "WARN": ANSI_YELLOW,
-    "WARNING": ANSI_YELLOW,
-    "INFO": ANSI_GREEN,
-    "DEBUG": ANSI_CYAN,
-    "CRITICAL": ANSI_MAGENTA,
-    "FATAL": ANSI_MAGENTA,
+_LEVEL_COLORS = {
+    "error": _RED + _BOLD,
+    "err": _RED + _BOLD,
+    "critical": _RED + _BOLD,
+    "fatal": _RED + _BOLD,
+    "warning": _YELLOW,
+    "warn": _YELLOW,
+    "info": _GREEN,
+    "debug": _CYAN,
 }
 
-LEVEL_PATTERN = re.compile(
-    r"\b(ERROR|WARN(?:ING)?|INFO|DEBUG|CRITICAL|FATAL)\b"
+# Matches common log-level tokens (case-insensitive, whole word)
+_LEVEL_RE = re.compile(
+    r"\b(CRITICAL|FATAL|ERROR|ERR|WARNING|WARN|INFO|DEBUG)\b"
+)
+
+# Matches ISO-8601-ish timestamps and Apache/syslog-style dates
+_TS_RE = re.compile(
+    r"(?:"
+    r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?"  # ISO
+    r"|\d{2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2} [+-]\d{4}"  # Apache
+    r"|[A-Za-z]{3} [ \d]\d \d{2}:\d{2}:\d{2}"  # syslog
+    r")"
 )
 
 
-def supports_color() -> bool:
-    """Return True if the terminal likely supports ANSI color codes."""
-    import sys
-    import os
-    return hasattr(sys.stdout, "isatty") and sys.stdout.isatty() and os.name != "nt"
+def supports_color(stream: IO = sys.stdout) -> bool:  # type: ignore[assignment]
+    """Return True when *stream* looks like a colour-capable terminal."""
+    return hasattr(stream, "isatty") and stream.isatty()
 
 
-def highlight_level(line: str) -> str:
-    """Colorize log level keywords within a line."""
-    def replace_level(match: re.Match) -> str:
-        level = match.group(1)
-        color = LEVEL_COLORS.get(level, ANSI_RESET)
-        return f"{color}{ANSI_BOLD}{level}{ANSI_RESET}"
-
-    return LEVEL_PATTERN.sub(replace_level, line)
+def highlight_level(token: str) -> str:
+    """Wrap *token* in the appropriate ANSI colour for its log level."""
+    color = _LEVEL_COLORS.get(token.lower(), "")
+    if color:
+        return f"{color}{token}{_RESET}"
+    return token
 
 
-def highlight_timestamp(line: str, timestamp_str: Optional[str]) -> str:
-    """Highlight the timestamp portion of a line in cyan."""
-    if not timestamp_str:
+def replace_level(match: re.Match) -> str:  # type: ignore[type-arg]
+    return highlight_level(match.group(0))
+
+
+def highlight_timestamp(text: str) -> str:
+    """Wrap timestamp substrings in *text* with a dim/cyan colour."""
+    return _TS_RE.sub(lambda m: f"{_CYAN}{m.group(0)}{_RESET}", text)
+
+
+def highlight_line(line: str, *, color: bool = True, timestamps: bool = True) -> str:
+    """Return *line* with ANSI highlights applied.
+
+    When *color* is False the original line is returned unchanged.
+    When *timestamps* is False only log-level tokens are highlighted.
+    """
+    if not color:
         return line
-    escaped = re.escape(timestamp_str)
-    return re.sub(
-        escaped,
-        f"{ANSI_CYAN}{timestamp_str}{ANSI_RESET}",
-        line,
-        count=1,
-    )
-
-
-def highlight_line(line: str, timestamp_str: Optional[str] = None, use_color: bool = True) -> str:
-    """Apply all highlighting to a log line."""
-    if not use_color:
-        return line
-    line = highlight_timestamp(line, timestamp_str)
-    line = highlight_level(line)
-    return line
+    result = _LEVEL_RE.sub(replace_level, line)
+    if timestamps:
+        result = highlight_timestamp(result)
+    return result
