@@ -30,6 +30,12 @@ def build_redact_parser(sub=None) -> ArgumentParser:
     return parser
 
 
+def _write_lines(lines, out):
+    """Write an iterable of lines to *out*, ensuring each ends with a newline."""
+    for line in lines:
+        out.write(line if line.endswith("\n") else line + "\n")
+
+
 def run_redact(args: Namespace, out=None) -> int:
     out = out or sys.stdout
     try:
@@ -49,14 +55,12 @@ def run_redact(args: Namespace, out=None) -> int:
     if args.files:
         for path in args.files:
             try:
-                for line in redact_file(path, compiled, args.mask):
-                    out.write(line if line.endswith("\n") else line + "\n")
+                _write_lines(redact_file(path, compiled, args.mask), out)
             except OSError as exc:
                 print(f"error: {exc}", file=sys.stderr)
                 return 1
     else:
-        for line in redact_lines(sys.stdin, compiled, args.mask):
-            out.write(line if line.endswith("\n") else line + "\n")
+        _write_lines(redact_lines(sys.stdin, compiled, args.mask), out)
 
     return 0
 
