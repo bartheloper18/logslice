@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import unittest.mock as mock
 
 import pytest
 
@@ -17,10 +18,12 @@ def _ns(**kwargs) -> argparse.Namespace:
 
 
 def _run(ns, input_lines=None):
+    """Run convert command, optionally patching stdin with *input_lines*.
+
+    Returns a ``(exit_code, captured_output)`` tuple.
+    """
     out = io.StringIO()
     if input_lines is not None:
-        import unittest.mock as mock
-        import sys
         fake_stdin = io.StringIO("".join(input_lines))
         with mock.patch("sys.stdin", fake_stdin):
             code = run_convert(ns, out)
@@ -102,3 +105,11 @@ def test_output_written_to_file(tmp_path):
     assert code == 0
     written = dest.read_text()
     assert "key" in written
+
+
+def test_missing_input_file_returns_nonzero(tmp_path):
+    """run_convert should return a non-zero exit code for a missing input file."""
+    ns = _ns(target="json", file=str(tmp_path / "does_not_exist.log"))
+    out = io.StringIO()
+    code = run_convert(ns, out)
+    assert code != 0
