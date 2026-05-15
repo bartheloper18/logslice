@@ -49,3 +49,21 @@ def delete_profile(name: str, path: Path = _DEFAULT_PATH) -> bool:
 def list_profiles(path: Path = _DEFAULT_PATH) -> List[str]:
     """Return sorted list of stored profile names."""
     return sorted(_load(path).keys())
+
+
+def rename_profile(
+    old_name: str, new_name: str, path: Path = _DEFAULT_PATH
+) -> bool:
+    """Rename an existing profile from *old_name* to *new_name*.
+
+    Returns ``True`` if the rename succeeded, or ``False`` if *old_name* was
+    not found.  Raises ``ValueError`` if *new_name* already exists.
+    """
+    data = _load(path)
+    if old_name not in data:
+        return False
+    if new_name in data:
+        raise ValueError(f"Profile {new_name!r} already exists.")
+    data[new_name] = data.pop(old_name)
+    _save(data, path)
+    return True
