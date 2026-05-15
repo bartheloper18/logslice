@@ -27,8 +27,22 @@ def find_rotated_files(base: str | Path, include_gz: bool = True) -> List[Path]:
         Path to the current (active) log file.
     include_gz:
         When *False*, compressed rotated files are excluded.
+
+    Returns
+    -------
+    List[Path]
+        Paths ordered newest-first: the base file first, then rotated files
+        in ascending index order (1, 2, 3, …).
+
+    Raises
+    ------
+    FileNotFoundError
+        If *base* does not exist.
     """
     base = Path(base)
+    if not base.exists():
+        raise FileNotFoundError(f"Base log file not found: {base}")
+
     parent = base.parent
     siblings: List[tuple[int, Path]] = []
 
